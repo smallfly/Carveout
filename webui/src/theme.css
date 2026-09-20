@@ -1,0 +1,370 @@
+/*
+ SPDX-FileCopyrightText: 2026 Dpt. <https://www.dpt.co>
+ SPDX-License-Identifier: GPL-3.0-or-later
+*/
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Appearance tokens. Two palettes, one attribute: <html data-theme="dark"
+   | "light"> (index.html paints it before the bundle loads; src/theme.ts
+   owns it afterwards). Every chrome colour goes through these channels —
+   tailwind.config.js wraps them as rgb(var(--c-*) / alpha) — so the
+   theme never reaches into the 3D canvas, the label pills, the 3D tags,
+   the scene background or the overlay/axis colours, which are scene data
+   and keep their own values below. Character: neutral charcoal / warm
+   light, sans chrome, mono for paths/IDs/values, colour only as state
+   (green done, amber warning, red error/destructive), no glow. */
+
+:root {
+  color-scheme: dark;
+  --c-app: 24 24 24;          /* #181818 application background */
+  --c-panel: 34 34 34;        /* #222222 rail, header, inspector, dialogs */
+  --c-inset: 27 27 27;        /* #1B1B1B inputs, wells */
+  --c-hover: 44 44 44;        /* #2C2C2C */
+  --c-sel: 54 54 54;          /* #363636 */
+  --c-line: 56 56 56;         /* #383838 structural divider */
+  --c-line2: 112 112 112;     /* #707070 control edge (≥3:1 on panel/inset) */
+  --c-t1: 232 232 230;        /* #E8E8E6 */
+  --c-t2: 196 196 192;        /* #C4C4C0 */
+  --c-t3: 166 166 162;        /* #A6A6A2 */
+  --c-t4: 126 126 122;        /* #7E7E7A placeholders, idle */
+  --c-primary: 228 228 223;   /* #E4E4DF primary action fill */
+  --c-primary-fg: 32 32 32;   /* #202020 */
+  --c-pass: 116 200 132;      /* #74C884 */
+  --c-warn: 226 178 76;       /* #E2B24C */
+  --c-fail: 240 122 110;      /* #F07A6E */
+  --c-focus: 232 232 230;     /* #E8E8E6 keyboard focus ring */
+  --c-cue: 100 143 209;       /* #648FD1 the current step's bar and dot — the
+                                 one colour in a neutral panel (the viewport's
+                                 auto-capture blue, so it reads as ours) */
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --c-app: 243 243 241;       /* #F3F3F1 */
+  --c-panel: 250 250 249;     /* #FAFAF9 */
+  --c-inset: 255 255 255;     /* #FFFFFF */
+  --c-hover: 236 236 234;     /* #ECECEA */
+  --c-sel: 225 225 222;       /* #E1E1DE */
+  --c-line: 213 213 209;      /* #D5D5D1 */
+  --c-line2: 142 142 138;     /* #8E8E8A control edge (≥3:1 on panel/inset) */
+  --c-t1: 36 36 36;           /* #242424 */
+  --c-t2: 68 68 64;           /* #444440 */
+  --c-t3: 98 98 94;           /* #62625E */
+  --c-t4: 134 134 130;        /* #868682 */
+  --c-primary: 48 48 48;      /* #303030 */
+  --c-primary-fg: 255 255 255;
+  --c-pass: 30 125 62;        /* #1E7D3E */
+  --c-warn: 138 92 0;         /* #8A5C00 */
+  --c-fail: 178 40 30;        /* #B2281E */
+  --c-focus: 36 36 36;        /* #242424 */
+  --c-cue: 47 111 191;        /* #2F6FBF */
+}
+
+/* One rem type scale: every chrome size rides the
+   root; the coarse viewport bump keeps ~2.5K displays at the mockups'
+   optical size. Floors — body 0.8125rem (13px), secondary 0.75rem (12px),
+   microlabels 0.6875rem (11px); nothing below 11px physical, ever. The 3D
+   canvas never scales. */
+html {
+  font-size: 16px;
+}
+@media (min-width: 2200px) {
+  html {
+    font-size: 18px;
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: rgb(var(--c-app));
+  color: rgb(var(--c-t1));
+  font-family: "Inter", system-ui, sans-serif;
+  font-feature-settings: "cv11", "ss01";   /* Inter: single-storey a, open digits */
+  -webkit-font-smoothing: antialiased;
+}
+body,
+#root {
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+/* Keyboard focus: a neutral ring with a 1px app-coloured gap so it reads
+   on every surface, dark or light. Mouse clicks do not paint it. */
+:focus-visible {
+  outline: 2px solid rgb(var(--c-focus));
+  outline-offset: 1px;
+  box-shadow: 0 0 0 1px rgb(var(--c-app));
+}
+/* text fields also lift their edge (the ring alone sits far from the box) */
+.ui-input:focus-visible {
+  outline-offset: 0;
+  border-color: rgb(var(--c-t3));
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--c-line2));
+  border: 2px solid rgb(var(--c-panel));
+  border-radius: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+* {
+  scrollbar-color: rgb(var(--c-line2)) transparent;
+  scrollbar-width: thin;
+}
+
+@layer components {
+  /* the field: inset ground, control edge, mono for the value */
+  .ui-input {
+    @apply bg-inset border border-line2 rounded px-2 h-7 font-mono
+      text-[0.8125rem] text-t1 placeholder:text-t4;
+    tab-size: 4;
+  }
+  /* locked (read-only gate, held scene, job running): the saved value stays
+     readable — subdued surface + edge say "not editable", not opacity */
+  .ui-input:disabled {
+    @apply bg-hover/60 border-line text-t2 cursor-not-allowed;
+  }
+  /* native disclosure: keyboard-operable, state exposed by the open
+     attribute; the marker is ours */
+  .ui-details > summary {
+    @apply text-[0.75rem] text-t3 cursor-pointer select-none list-none
+      inline-flex items-center gap-1 rounded-sm hover:text-t1;
+  }
+  .ui-details > summary::-webkit-details-marker {
+    display: none;
+  }
+  .ui-details > summary::before {
+    content: "";
+    @apply inline-block w-0 h-0 border-y-[4px] border-y-transparent
+      border-l-[5px] border-l-current transition-transform;
+  }
+  .ui-details[open] > summary::before {
+    transform: rotate(90deg);
+  }
+  /* property-row label: sans, secondary, first letter capitalised so the
+     enum-ish strings the panels pass ("fog horizon (m)") read as labels */
+  .ui-label {
+    @apply text-[0.75rem] text-t2 leading-4;
+    display: inline-block;
+  }
+  .ui-label::first-letter,
+  .ui-cap::first-letter {
+    text-transform: uppercase;
+  }
+  .ui-cap {
+    display: inline-block;
+  }
+  /* helper prose under a control or section title */
+  .ui-help {
+    @apply text-[0.75rem] text-t3 leading-4;
+  }
+  /* data: paths, ids, counts */
+  .ui-mono {
+    @apply font-mono text-[0.78rem] tabular-nums;
+  }
+  .ui-num {
+    font-variant-numeric: tabular-nums;
+  }
+  /* notice boxes: one subtle tinted well, colour + text carry the state */
+  .ui-note {
+    @apply rounded border px-2.5 py-2 text-[0.75rem] leading-4;
+  }
+  .ui-note-warn {
+    @apply ui-note border-warn/50 bg-warn/10 text-t1;
+  }
+  .ui-note-fail {
+    @apply ui-note border-fail/50 bg-fail/10 text-t1;
+  }
+  .ui-note-pass {
+    @apply ui-note border-pass/50 bg-pass/10 text-t1;
+  }
+  .ui-note-muted {
+    @apply ui-note border-line bg-inset text-t2;
+  }
+}
+
+/* Slider recipe: 4px track on the inset ground, neutral filled run
+   (--fill set inline by ui.tsx Slider), 14px round thumb with a control
+   edge, 24px hit height. No native browser sliders anywhere. */
+input[type="range"].ui-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 24px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"].ui-slider:disabled {
+  cursor: default;
+}
+input[type="range"].ui-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    rgb(var(--c-t3)) var(--fill, 0%),
+    rgb(var(--c-line2)) var(--fill, 0%)
+  );
+}
+input[type="range"].ui-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgb(var(--c-t1));
+  border: 1px solid rgb(var(--c-app));
+  margin-top: -5px;
+}
+input[type="range"].ui-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgb(var(--c-line2));
+}
+input[type="range"].ui-slider::-moz-range-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: rgb(var(--c-t3));
+}
+input[type="range"].ui-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgb(var(--c-t1));
+  border: 1px solid rgb(var(--c-app));
+}
+
+/* splat-canvas label annotations (viewer/lib/labels.js contract — the
+   .ann DOM). Two rules learned in user testing: the pill face is Figtree
+   (a different face read as a different product), and a hidden accent is
+   recolored to the pill edge rather than removed — border-left otherwise
+   falls back to currentColor and leaves a light 1px sliver. Figtree is
+   bundled via @fontsource (no CDN); em dimensions ride the 12px .ann base
+   so the world-scale re-bake stays crisp. */
+#wb-labels {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 5;
+  /* pill edge follows the bg color (--pill-bg set from settings) */
+  --pill-edge: color-mix(in srgb, var(--pill-bg, #0d1117) 90%, #fff);
+}
+#wb-labels .ann {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  font-size: 12px;
+  will-change: transform, opacity;
+  visibility: hidden;
+}
+#wb-labels.no-promote .ann {
+  will-change: auto;
+}
+#wb-labels .ann-dot {
+  position: absolute;
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  left: -0.25em;
+  top: -0.25em;
+  box-shadow: 0 0 0.25em rgba(0, 0, 0, 0.8);
+}
+/* the verifier's doubt, as a mark after the name: "?" the label is in
+   doubt, "≈" held (one object or several?) — viewer/lib/verdicts.js; the
+   tooltip and the object card say why */
+#wb-labels .ann-pill.ann-flag .ann-name::after {
+  content: " " attr(data-mark);
+  color: #f5c451;
+  font-weight: 700;
+}
+#wb-labels .ann-leader {
+  position: absolute;
+  width: 0.0833em;
+  height: 1.3333em;
+  left: -0.0417em;
+  top: -1.5833em;
+  opacity: 0.85;
+}
+#wb-labels .ann-pill {
+  position: absolute;
+  bottom: 1.5833em;
+  left: 0;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  cursor: pointer;
+  font: 1em/1 "Figtree", system-ui, sans-serif;
+  color: #dbe2ea;
+  background: color-mix(in srgb, var(--pill-bg, #0d1117) 88%, transparent);
+  border: 0.0833em solid var(--pill-edge, #21262d);
+  border-left: 0.25em solid #fff;
+  border-radius: 0.25em;
+  padding: 0.3333em 0.5833em;
+}
+#wb-labels .ann-pill:hover {
+  color: #fff;
+  background: color-mix(in srgb, var(--pill-bg, #0d1117) 85%, #fff);
+}
+#wb-labels .ann-name {
+  text-transform: uppercase;
+}
+#wb-labels.no-accent .ann-pill {
+  border-left: 0.0833em solid var(--pill-edge, #21262d);
+}
+#wb-labels .ann-conf {
+  color: #7d8590;
+  margin-left: 0.25em;
+}
+#wb-labels.no-score .ann-conf {
+  display: none;
+}
+
+/* frustum/box HTML tags projected over the canvas. Deliberately NOT on
+   the appearance tokens: they float over the scene (whose background is
+   the operator's own setting) beside the label pills, and the selected
+   fill is the frustum colour — scene data, not chrome. Positioned by
+   TRANSFORM ONLY (compositor path, will-change) — left/top writes forced
+   layout every update and lagged the camera (first user test). */
+.tag3d {
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem; /* PiP-header treatment (P3.5), rides the P1 bump */
+  padding: 1px 6px;
+  border: 1px solid #2a2f34;
+  border-radius: 3px;
+  background: rgba(10, 12, 13, 0.85);
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* camera chips are clickable (select their frame); volume tags are not */
+.tag3d[data-frame] {
+  pointer-events: auto;
+  cursor: pointer;
+}
+/* selected pill flips filled-accent / dark text (text color inline) */
+.tag3d.sel {
+  background: oklch(0.8 0.11 200);
+  border-color: oklch(0.8 0.11 200);
+}
+/* raycast hover / pointer hover: brighten only — no color change */
+.tag3d.hot,
+.tag3d[data-frame]:hover {
+  filter: brightness(1.35);
+  border-color: #4e585d;
+}

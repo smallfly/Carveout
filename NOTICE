@@ -1,0 +1,86 @@
+Carveout
+Copyright (C) 2026 Dpt. (https://www.dpt.co)
+
+This program is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. See LICENSE for the full text of version 3.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+--------------------------------------------------------------------------------
+Third-party components
+--------------------------------------------------------------------------------
+
+Carveout bundles none of the software below. Each is installed from its own
+upstream by the environment setup or bundled into the browser front-end at build
+time, and remains governed by its own licence. This file is a summary for convenience, not a
+substitute for those licences.
+
+SAM 3 / SAM 3.1  —  Meta Platforms, Inc.
+    https://github.com/facebookresearch/sam3
+    Licence: SAM License (custom, non-OSI). Model weights are distributed under
+    gated access on Hugging Face (facebook/sam3, facebook/sam3.1) and require
+    the user to request access and accept Meta's terms directly.
+    Carveout redistributes neither the code nor the weights: the `sam3` package
+    is installed from Meta's repository and the checkpoints are downloaded by the
+    user. The segmentation stage is unusable without them.
+
+    Carveout integrates SAM 3 at ARM'S LENGTH — as a user-installed external
+    package called through its published API, not as a bundled, derived or
+    combined work distributed by this project. Carveout's own code is
+    GPL-3.0-or-later; SAM 3 remains governed by Meta's SAM License, which each
+    user accepts directly, INCLUDING ITS FIELD-OF-USE RESTRICTIONS. Those
+    restrictions bind your use of SAM 3; they do not attach to Carveout's code.
+
+gsplat  —  nerfstudio project
+    https://github.com/nerfstudio-project/gsplat
+    Licence: Apache License 2.0.
+    Installed as a Python dependency; used to rasterise views and to attribute
+    rendered masks back to individual Gaussians.
+
+three.js  —  three.js authors
+    https://github.com/mrdoob/three.js
+    Licence: MIT.
+    Bundled into the browser front-end at build time (declared in
+    webui/package.json).
+
+SparkJS  —  https://github.com/sparkjs-dev/spark  (https://sparkjs.dev/)
+    Licence: MIT.
+    Gaussian-splat rendering in the browser front-end; bundled at build time.
+
+Qwen3.8-27B and Qwen3-VL-8B  —  Alibaba Cloud / Qwen team
+    https://huggingface.co/Qwen/Qwen3.8-27B
+    https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct
+    Licence: Apache License 2.0. Ungated: no access request and no terms to
+    accept, unlike the SAM 3 checkpoints above.
+    Carveout redistributes neither the weights nor any Qwen code. The weights
+    are downloaded by the user (README step 7) into models/, which is not in
+    this repository, and are loaded through the `transformers` library. One
+    of the two, chosen per scene, serves the three OPTIONAL vision-model uses
+    — the second opinion on a measured length at the volume gate, the
+    vocabulary proposal, and label verification — each of which refuses with
+    the download command when the weights are absent. The rest of the
+    pipeline never loads them.
+
+React, Vite, Tailwind CSS, and the other build-time dependencies of the browser
+front-end are declared in webui/package.json with their own licences; they are
+build and runtime dependencies of that bundle only.
+
+PyTorch, torchvision, NumPy, Pillow, matplotlib, plyfile, PyYAML, huggingface_hub
+and the remaining Python dependencies are declared in environment.yml and
+pyproject.toml, and are installed from PyPI under their own licences.
+
+Fonts: the browser front-end bundles Inter, IBM Plex Mono and Figtree via
+@fontsource (SIL Open Font License 1.1) at build time and fetches no font at
+runtime.
+
+--------------------------------------------------------------------------------
+Services
+--------------------------------------------------------------------------------
+
+None. Carveout makes no network calls at run time and sends no data off the
+machine. The optional vision-model stages run a local model, downloaded by the
+user alongside the SAM 3 checkpoints (see README). There is no API key.

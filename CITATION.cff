@@ -1,0 +1,180 @@
+cff-version: 1.2.0
+message: "If you use Carveout in published work, please cite it as below."
+title: Carveout
+abstract: >-
+  Open-vocabulary object segmentation and 3D localization for trained 3D
+  Gaussian Splatting scenes. Carveout renders synthetic views of a scene,
+  segments them with SAM 3 Promptable Concept Segmentation, lifts the 2D masks
+  to per-Gaussian labels, and exports labelled 3D object instances.
+type: software
+authors:
+  - given-names: Hugues
+    family-names: Bruyère
+version: 0.2.0
+repository-code: "https://github.com/smallfly/Carveout"
+# The publication date of THIS version: set to the day of the public push.
+date-released: 2026-09-17
+# SPDX identifier: GPLv3, or any later version at the recipient's option.
+license: GPL-3.0-or-later
+keywords:
+  - gaussian-splatting
+  - 3d-segmentation
+  - open-vocabulary
+  - instance-segmentation
+  - sam3
+  - radiance-fields
+
+references:
+  - type: article
+    title: "SAM 3: Segment Anything with Concepts"
+    year: 2025
+    url: "https://arxiv.org/abs/2511.16719"
+    notes: "arXiv:2511.16719. The segmentation model Carveout prompts."
+    authors:
+      - given-names: Nicolas
+        family-names: Carion
+      - given-names: Laura
+        family-names: Gustafson
+      - given-names: Yuan-Ting
+        family-names: Hu
+      - given-names: Shoubhik
+        family-names: Debnath
+      - given-names: Ronghang
+        family-names: Hu
+      - given-names: Didac
+        family-names: Suris
+      - given-names: Chaitanya
+        family-names: Ryali
+      - given-names: Kalyan Vasudev
+        family-names: Alwala
+      - given-names: Haitham
+        family-names: Khedr
+      - given-names: Andrew
+        family-names: Huang
+      - given-names: Jie
+        family-names: Lei
+      - given-names: Tengyu
+        family-names: Ma
+      - given-names: Baishan
+        family-names: Guo
+      - given-names: Arpit
+        family-names: Kalla
+      - given-names: Markus
+        family-names: Marks
+      - given-names: Joseph
+        family-names: Greer
+      - given-names: Meng
+        family-names: Wang
+      - given-names: Peize
+        family-names: Sun
+      - given-names: Roman
+        family-names: Rädle
+      - given-names: Triantafyllos
+        family-names: Afouras
+      - given-names: Effrosyni
+        family-names: Mavroudi
+      - given-names: Katherine
+        family-names: Xu
+      - given-names: Tsung-Han
+        family-names: Wu
+      - given-names: Yu
+        family-names: Zhou
+      - given-names: Liliane
+        family-names: Momeni
+      - given-names: Rishi
+        family-names: Hazra
+      - given-names: Shuangrui
+        family-names: Ding
+      - given-names: Sagar
+        family-names: Vaze
+      - given-names: Francois
+        family-names: Porcher
+      - given-names: Feng
+        family-names: Li
+      - given-names: Siyuan
+        family-names: Li
+      - given-names: Aishwarya
+        family-names: Kamath
+      - given-names: Ho Kei
+        family-names: Cheng
+      - given-names: Piotr
+        family-names: Dollár
+      - given-names: Nikhila
+        family-names: Ravi
+      - given-names: Kate
+        family-names: Saenko
+      - given-names: Pengchuan
+        family-names: Zhang
+      - given-names: Christoph
+        family-names: Feichtenhofer
+
+  - type: article
+    title: "3D Gaussian Splatting for Real-Time Radiance Field Rendering"
+    journal: "ACM Transactions on Graphics"
+    volume: 42
+    issue: 4
+    month: 7
+    year: 2023
+    url: "https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/"
+    notes: "The scene representation Carveout consumes."
+    authors:
+      - given-names: Bernhard
+        family-names: Kerbl
+      - given-names: Georgios
+        family-names: Kopanas
+      - given-names: Thomas
+        family-names: Leimkühler
+      - given-names: George
+        family-names: Drettakis
+
+  - type: article
+    title: "gsplat: An open-source library for Gaussian splatting"
+    journal: "Journal of Machine Learning Research"
+    volume: 26
+    issue: 34
+    start: 1
+    end: 17
+    year: 2025
+    url: "https://github.com/nerfstudio-project/gsplat"
+    notes: >-
+      Rasterisation backend: renders the synthetic views and supplies the
+      backward pass used to attribute masks to Gaussians.
+    authors:
+      - given-names: Vickie
+        family-names: Ye
+      - given-names: Ruilong
+        family-names: Li
+      - given-names: Justin
+        family-names: Kerr
+      - given-names: Matias
+        family-names: Turkulainen
+      - given-names: Brent
+        family-names: Yi
+      - given-names: Zhuoyang
+        family-names: Pan
+      - given-names: Otto
+        family-names: Seiskari
+      - given-names: Jianbo
+        family-names: Ye
+      - given-names: Jeffrey
+        family-names: Hu
+      - given-names: Matthew
+        family-names: Tancik
+      - given-names: Angjoo
+        family-names: Kanazawa
+
+  - type: conference-paper
+    title: "FlashSplat: 2D to 3D Gaussian Splatting Segmentation Solved Optimally"
+    collection-title: "European Conference on Computer Vision (ECCV)"
+    year: 2024
+    url: "https://arxiv.org/abs/2409.08270"
+    notes: >-
+      The 2D-to-3D mask lifting method Carveout's stage 3 follows (implemented
+      on gsplat's autograd rather than vendored).
+    authors:
+      - given-names: Qiuhong
+        family-names: Shen
+      - given-names: Xingyi
+        family-names: Yang
+      - given-names: Xinchao
+        family-names: Wang

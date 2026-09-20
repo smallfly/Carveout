@@ -1,0 +1,32 @@
+<!doctype html>
+<!--
+ SPDX-FileCopyrightText: 2026 Dpt. <https://www.dpt.co>
+ SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Carveout</title>
+    <!-- Appearance is painted before the bundle loads so the first frame is
+         already the chosen theme; src/theme.ts owns it from then on. -->
+    <script>
+      (function () {
+        var t = "dark";
+        try {
+          var s = localStorage.getItem("carveout_ui_theme");
+          if (s === "light") t = "light";
+          else if (s === "system" && window.matchMedia &&
+                   window.matchMedia("(prefers-color-scheme: light)").matches)
+            t = "light";
+        } catch (e) {}
+        document.documentElement.dataset.theme = t;
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

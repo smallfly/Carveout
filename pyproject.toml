@@ -1,0 +1,28 @@
+# SPDX-FileCopyrightText: 2026 Dpt. <https://www.dpt.co>
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[build-system]
+requires = ["setuptools>=61,<81"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "carveout"
+version = "0.2.0"
+description = "SAM 3 + Gaussian-level segmentation/localization for trained 3DGS scenes"
+requires-python = ">=3.12"
+# torch/gsplat/sam3 are intentionally NOT listed: they must come from
+# environment.yml's pinned cu128 set, and pip re-resolving them here could
+# pull wrong wheels. This package only declares its own light deps.
+dependencies = [
+    "numpy>=1.26,<2",
+    "plyfile>=1.0",
+    "pyyaml>=6",
+    "pillow>=10",
+    "matplotlib>=3.9",
+]
+
+[project.scripts]
+carveout = "carveout.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["carveout*"]

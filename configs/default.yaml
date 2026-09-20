@@ -1,0 +1,682 @@
+# SPDX-FileCopyrightText: 2026 Dpt. <https://www.dpt.co>
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Carveout default configuration.
+# Every threshold lives here; CLI flags override.
+# `profile` selects a VRAM profile below; 24gb is the safe default.
+
+profile: 24gb
+
+scene:
+  # Up axis for floor detection / camera placement. This is Carveout's RENDER
+  # CONVENTION, not a measurement: scenes arrive -Y up (the 3DGS/COLMAP
+  # convention, and what the viewer's pi-about-X flip already assumes), and
+  # orienting the scene is the operator's job at ingest — no container records
+  # which way is up, so nothing downstream can recover it.
+  #   "auto" does NOT auto-detect: it PROPOSES a direction from the scene's
+  # proportions and then REFUSES, so the axis is always an explicit act — the
+  # same rule as every other machine suggestion in this pipeline. Use it to be
+  # told what the shape suggests, then pin the answer; a guess that is right for
+  # rooms wider than they are tall is silently wrong for a corridor.
+  # Values: -y (convention), +x, -x, +y, +z, -z, or auto (propose and refuse).
+  up_axis: "-y"
+  # Metres per scene unit. No splat container records its scale: a capture
+  # from a metric-posed device is to scale, a plain SfM/photogrammetry
+  # reconstruction carries an ARBITRARY unit, and both arrive as the same
+  # .ply. The operator answers (nothing guesses a scene's size): declare
+  # the capture metric at creation (1.0), type the
+  # number when it is known, or MEASURE one thing on the canvas at the
+  # volume gate — the ruler: two clicks on something whose real length is
+  # known (a door, a tile, a gravestone, a paced wall) and the length typed
+  # in m / cm / ft / in. The factor is then typed length / measured units,
+  # written here, with the act recorded under `measured` below. null = not
+  # yet recorded — and such a scene does NOT run: Propose refuses to the
+  # volume gate naming the ruler, because every grid, stand-off and voxel
+  # is sized in metres and a default factor would be a guess.
+  #   APPLIED at use: every metre knob — eye heights, slabs, voxel
+  # and cell sizes, standoffs, clip planes, the quality distances,
+  # lift.instance_voxel and scope_margin — is divided by the factor when a
+  # stage starts (carveout/units.py lists them; every manifest records the
+  # factor, its source — recorded | measured — and what each knob became).
+  # The profile stays in metres; the Gaussians are never rescaled.
+  # Changing it re-opens the volume gate and invalidates the render and
+  # lift caches.
+  scale_m_per_unit: null
+  # The ruler act's record — the length typed, in metres; the distance it
+  # spanned in scene units; the operator's label and unit; the two points
+  # so the line is redrawn on reopen. `scale_m_per_unit` above is derived
+  # from it (length_m / units). Null when the factor was declared or
+  # typed. Written by the volume gate's Record; never by hand.
+  measured: null
+  # Vertical extent (metres) outside which a scene filmed INSIDE A SPACE
+  # is called implausible and the volume gate's Check says so ("at this
+  # measurement the room reads 0.4 m tall — check the two points").
+  # Deliberately WIDE: this catches "not to scale at all" (0.05, or 47),
+  # not a scene that is merely unusual. Read only under the `interior`
+  # filming answer; an exterior or an orbited subject has no ceiling to
+  # judge by.
+  plausible_height_m: [1.8, 6.0]
+  # Robust bounds percentiles (ignore floaters).
+  bounds_pct_lo: 1.0
+  bounds_pct_hi: 99.0
+  # Floor detection: dominant density peak within the lowest floor_band_frac of
+  # the height range (room-assuming: keeps desk/counter planes from winning),
+  # histogram bin hist_bin_m. Lower it to 0.2 on a room whose bench or table
+  # plane still wins the vote — measured on three scenes so far, all of which
+  # elected a work surface at ~0.89 m under the 0.4 default.
+  floor_band_frac: 0.4
+  hist_bin_m: 0.05
+  # Operator floor override: SIGNED up-axis height of the floor plane;
+  # null = auto-detect via floor_band_frac. Set it when the band heuristic
+  # elects a cluttered surface (observed: a workbench top won the floor vote).
+  # Adjustable in the web UI at the volume gate (the Floor field; the
+  # translucent plane on the canvas shows the value).
+  floor: null
+  # The levelling: a capture can arrive tilted — no
+  # container records which way is up — and a straight box cannot hug a
+  # room whose floor leans. `alignment` is a small rotation on top of
+  # up_axis: tilt_deg about the two ground axes, then yaw_deg about the up
+  # axis. Every geometric decision (the frame, the floor, the volume, the
+  # camera placement, the upright boxes) happens in the levelled frame;
+  # the file is never rewritten, and every pose on disk and every export
+  # stays in the file's own frame. PROPOSED by the volume gate's read
+  # (the Check card's "level" line) and adopted by an explicit act, or
+  # LEVELLED from three points clicked on the floor (+ two along a wall);
+  # never guessed. null = the file's axes. Written by the volume gate.
+  alignment: null
+  # The level read's knobs: how far a tilt is searched, below what angle a
+  # scene counts as level, how much sharper the floor must read for the
+  # read to call the scene off level, how clear the wall direction must be
+  # for a yaw to be proposed, and the Gaussian subsample it reads.
+  alignment_read:
+    max_tilt_deg: 30
+    level_tol_deg: 1.0
+    share_gain_min: 1.5
+    yaw_margin_min: 1.2
+    sample: 300000
+
+render:
+  num_views: 60         # the INITIAL round's budget; coverage repair rounds
+                        # add up to coverage.round_views each on top, and
+                        # manual views are additive
+  # The first round renders candidate_factor x num_views passing views,
+  # then keeps num_views by greedy coverage gain — each pick the view that
+  # newly covers the most of the volume given the picks before it,
+  # sharpness breaking ties (1 = first-come, the old behaviour).
+  # Costs that factor in render time; the unchosen frames are deleted.
+  candidate_factor: 2.0
+  width: 768
+  height: 768
+  fov_deg: 70.0
+  sh_degree: 3          # cap on SH bands to evaluate; a lower-degree file uses its own
+  near_plane: 0.05
+  far_plane: 1000.0
+  # Views rendered per GPU batch (the render's VRAM chunk size). It lives
+  # here and not under detect: because only the render stage reads it, and
+  # a VRAM knob the operator cannot find is a knob that does not exist.
+  views_in_flight: 2
+
+  # Budget for the scene-sized 2D grid, in cells. Checked BEFORE
+  # the allocation or the scan and refuses naming the two causes: a scene
+  # whose measurement is wrong or that is not to scale (the usual one —
+  # the grid is sized in metres over bounds in scene units, so a 100x
+  # export is 10^4 the cells and the enclosure scan ~10^6 the work) or a
+  # legitimately large metric scene.
+  #   footprint_cells: the 2D ground grid at interior.voxel_size — the
+  # volume proposal's enclosure scan and the interior path's free-space
+  # search (both pure-Python ray walks). 250k cells is 100 x 100 m at
+  # 0.2 m; a room is a few hundred cells.
+  grid_budget:
+    footprint_cells: 250000
+  # Candidate views generated per kept view; the quality filter prunes back to
+  # num_views (or fewer, logged loudly).
+  oversample: 2.5
+
+  # interior | orbit | ground | manual — HOW THE SCENE WAS FILMED, the
+  # operator's answer at creation (inside a space / around a subject /
+  # outdoors on the ground) and changeable on the render
+  # panel. Carveout never chooses the camera path: `auto` here means "no
+  # answer", and a render under it refuses with one sentence naming the
+  # render panel. The answer also picks the volume proposer's strategy
+  # (interior -> enclosed-first; the other two -> the density core), and
+  # the Propose analysis CHECKS it against the geometry — stated on the
+  # panels, never applied.
+  #   `manual` is the hand-held mode: the camera set IS manual_views.json and
+  # NOTHING is sampled. Use it when the operator wants to place and adjust
+  # every viewpoint — the render then reproduces exactly the views on disk, so
+  # a camera moved with the 3D gizmo stays where it was put instead of being
+  # regenerated. Consequences, all deliberate: the quality filter becomes
+  # ADVISORY (manual views always bypassed it; the per-frame stats and the
+  # "would have FAILED" warnings still appear, only enforcement stops),
+  # coverage is measured but cannot be gap-repaired (no free-space map), and
+  # `num_views` no longer applies. The render gate's "switch to fully manual"
+  # action sets this after converting the current auto views into manual ones.
+  path_mode: auto
+  # Written by the gate, not by hand: the mode to restore when the render step
+  # is reset. "auto" is not a safe assumption to reset TO — a scene deliberately
+  # pinned to `interior` would silently lose that — so the conversion records
+  # what it replaced. null outside fully-manual mode.
+  path_mode_before_manual: null
+  # Propose at the volume gate: on a MEASURED scene (the ruler) the job
+  # renders a few scale-free orbit probes plus one view aimed at the
+  # measured segment, draws the segment A–B into every view where it is
+  # visible (<workdir>/probe/), and asks the local VLM how long THAT
+  # segment is, judging by the objects around it — the second opinion the
+  # Check card states beside the measurement, flagged at a 2x
+  # disagreement, never applied. A declared or typed
+  # factor asks nothing. vlm_read: false = no probes, no model.
+  propose:
+    probe_views: 4
+    vlm_read: true
+
+  # Volume of interest: null -> use <workdir>/volume.json when present
+  # (Propose at the volume gate creates it). The scene's files —
+  # volume, density read, review plot, manual views, exemplars, viewer
+  # settings — live in the WORKDIR; nothing is written beside the capture.
+  volume: null
+
+  # Manual detection viewpoints (viewer-captured): null -> use
+  # <workdir>/manual_views.json when present; missing file = zero manual
+  # views. Rendered ADDITIVELY to the auto-sampled set at detection
+  # resolution, H-anchored (height = render height, width = height x captured
+  # aspect), focal from the captured VERTICAL fov. Hand-picked views bypass
+  # the quality filter and diversity prune (a would-have-failed warning is
+  # logged). The file's CONTENT is part of the stage-cache key: editing it
+  # invalidates stage1 and cascades downstream on the next run.
+  manual_views: null
+  manual_max_aspect: 2.5   # clamp pathological ultra-wide captures (warned)
+
+  # Near-duplicate pose rejection (gate feedback: same-POV frames add cost
+  # without coverage). Similar = closer than min_pos_sep AND view directions
+  # within min_angle_deg.
+  diversity:
+    min_pos_sep: 1.0       # m — generic; small-room profiles lower it (~0.8)
+    min_angle_deg: 18.0    # keeps the two pitch tiers (20 deg apart) distinct
+
+  # Post-filter coverage report + gap-driven candidate generation. Coverage =
+  # fraction of in-volume Gaussians (opacity >= min_opacity) observed depth-
+  # tested in at least k kept frames. Stage 3 lifting depends on this.
+  coverage:
+    k: 2
+    min_opacity: 0.3
+    depth_tol: 0.2         # m visibility slack vs rendered depth
+    depth_tol_rel: 0.05    # + relative slack
+    target_frac: 0.90
+    max_extra_rounds: 4
+    round_views: 12        # views a repair round may ADD (its own budget —
+                           # the initial round's num_views is not a ceiling
+                           # on repair)
+    targets_per_round: 12
+    gap_voxel: 0.5         # m, clustering of uncovered Gaussians
+    standoff: 2.5          # m, preferred camera distance for gap-repair views
+    min_aim_dist: 1.0      # m, floor under min_sightline / min_standoff for
+                           # gap-repair cameras (was a literal in code)
+
+  # Auto-proposal of volume.json (Propose at the volume gate).
+  volume_proposal:
+    # enclosed (rooms: wall-enclosed region) | density_core (exteriors: Otsu
+    # threshold on log density, no enclosure assumption) | auto = enclosed
+    # with density_core fallback when nothing is enclosed.
+    strategy: auto
+    min_component_frac: 0.2  # keep interior components >= this frac of largest
+    floor_margin: 0.1        # m below detected floor included in boxes
+    # Height of the proposed boxes: null = auto (floor-margin up to the
+    # robust ceiling); or [lo, hi] along the up axis, in scene units (a
+    # position, so the scale factor does not convert it).
+    height_range: null
+
+  interior:
+    eye_height: 1.6        # m above detected floor plane
+    # Confine camera positions to the volume boxes. TRUE is correct for
+    # room-sized volumes (keeps cameras out of adjacent spaces, e.g. through an
+    # open door); set FALSE in the scene profile for tight FOCUS volumes (their
+    # footprint is occupied by the objects themselves — a bench-top scene is the
+    # typical case): cameras then roam the room's free space while the
+    # volume still scopes coverage, aim targets, and lift/export.
+    cameras_in_volume: true
+    voxel_size: 0.20       # m, occupancy grid over Gaussian centers
+    occupied_density: 3.0  # opacity-weighted points per voxel to count as occupied
+    # Obstacle slab for free-space search: things between ankle and head height.
+    slab_lo: 0.3           # m above floor
+    slab_hi: 2.2
+    # The slab stops this far under the ceiling when one is read (the density
+    # peak in the top of the height range, like the floor): in a low room the
+    # slab would otherwise reach the ceiling and count it as an obstacle over
+    # the whole floor. A tall room never meets it.
+    ceiling_margin: 0.2    # m
+    insideness_min_hits: 6 # of 8 grid ray directions that must hit occupancy
+    clearance_vox: 3       # preferred erosion radius (voxels); auto-relaxed if too strict
+    views_per_position: 4  # yaw directions per camera position
+    min_yaw_sep_deg: 45.0
+    pitches_deg: [-5.0, -25.0]  # per yaw: level-ish + desk-height tilt
+    min_sightline: 1.5     # m, minimum free-space ray for a usable yaw
+    # Near-field views: the sightline rule aims across the room, so a
+    # desk, a counter or a bench is occupancy every camera turns away
+    # from. Furniture below eye height is what a standing person looks
+    # over: opacity in the slab below near_field_top with nothing at or
+    # above it (a desk with monitors on it qualifies; a wall, a door or a
+    # tall cabinet has mass up there and never does). Each connected piece
+    # of at least near_field_min_cells cells gets views along its length,
+    # one per near_field_spacing, each from the closest free cell within
+    # near_field_standoff whose slant distance to the piece's edge clears
+    # the quality filter's near_field_depth (so the fog pass never reads
+    # the desk's own edge), aimed by geometry at the top's own mean
+    # height, no pitch tier. Heavier pieces first; near_field_views caps
+    # the total, 0 turns it off.
+    near_field_views: 16
+    near_field_top: 1.6    # m above floor; eye height, what is looked over
+    near_field_spacing: 0.6   # m between aim points: half a frame's width a metre out
+    near_field_standoff: [0.4, 1.6]  # m, horizontal, camera to aim point
+    near_field_min_cells: 3   # smaller runs are floaters or a lone small object
+    # Focus aiming: when the volume is a tight FOCUS region (the
+    # subject, not the room), aim poses directly at spread points on the boxes
+    # instead of deep sightlines. Positions prefer the stand-off band (m from
+    # the box footprint); aim heights are fractions of each box's vertical
+    # span; focus_heights (m above floor) replaces the single eye_height for
+    # framing variety (null = [eye_height]). Pitch is exact look_at geometry.
+    focus_aim: false
+    focus_standoff: [0.5, 2.5]
+    focus_aim_height_fracs: [0.35, 0.65]
+    focus_heights: null
+    # Macro tier: extra positions very close to the volume, aimed at its
+    # lowest aim band only (small-object rescue — SAM 3 misses bench-top
+    # items beyond ~1 m at 768 px). null = off.
+    focus_macro_standoff: null
+    focus_macro_positions: 6
+
+  # Open exteriors: person-height cameras over a LOCAL ground map — the ground
+  # is not assumed planar (the exterior scene this was built for slopes ~4 m
+  # across its core; a global floor plane puts cameras underground at one end).
+  # Free space = low obstacle mass in a slab above LOCAL ground; the free-space
+  # threshold is AUTO-DERIVED from the scene's own obstacle-mass percentiles;
+  # no insideness test — the volume footprint scopes placement instead.
+  ground:
+    eye_height: 1.6        # m above LOCAL ground
+    cell_size: 0.5         # m, 2D ground/obstacle grid
+    min_opacity: 0.3       # gaussians feeding the ground/obstacle maps
+    ground_pct: 5.0        # per-cell low percentile of heights = local ground
+    min_cell_points: 20    # cells with fewer points get no ground estimate
+    fill_iters: 2          # neighbor-median hole-fill passes
+    slab_lo: 0.3           # obstacle slab above local ground (ankle..head), m
+    slab_hi: 2.2
+    # Free-space threshold candidates: percentiles of the POSITIVE per-cell
+    # obstacle mass, tried strictest-first until enough standable free cells.
+    free_mass_percentiles: [10, 25, 50, 75]
+    clearance_cells: 2     # preferred erosion radius (cells); auto-relaxed
+    views_per_position: 4  # yaw directions per camera position
+    min_yaw_sep_deg: 45.0
+    pitches_deg: [5.0, -15.0]  # level-ish (tall monuments) + down (low objects)
+    aim_range: 12.0        # m, yaw scoring horizon (distance-discounted mass)
+    aim_dist_floor: 1.0    # m, the discount's floor: mass nearer than this
+                           # counts as if at this distance (no 1/d blow-up)
+    min_standoff: 1.0      # m, reject yaws face-planted into nearer mass
+
+  orbit:
+    radius_scale: 1.4      # x robust bounding-sphere radius
+    elevations_deg: [10.0, 30.0, 55.0]
+
+  quality_filter:
+    alpha_thresh: 0.5
+    min_coverage: 0.55     # frac of pixels with alpha > alpha_thresh
+    min_median_depth: 1.0  # m; filters wall-stares and inside-geometry views
+    min_rgb_std: 0.03      # discard near-uniform frames (wall stares)
+    # Floater-fog detection (calibrated on a lab interior): a second
+    # rasterization pass keeps only Gaussians within near_field_depth; its mean
+    # alpha measures near-camera junk that expected-depth sees straight through.
+    near_field_depth: 1.2  # m — horizon of the near-field alpha pass
+    # Generic permissive defaults; per-scene calibration belongs in
+    # configs/scenes/<name>.yaml (a foggy reconstruction may need values as
+    # tight as 0.15 / 0.016).
+    max_near_alpha: 0.20
+    min_sharpness: 0.008   # Laplacian |d2I| mean over grayscale
+    # `min_median_depth` and `near_field_depth` may be set to "auto", which
+    # resolves them from the scene's own SIZE (its smallest horizontal
+    # extent, in scene units — scale-free by construction; the metre figure
+    # is recorded only under a recorded factor).
+    #   Why they and not the others: both are DISTANCES, and a distance
+    # calibrated in a 6 m room is meaningless in a 2 m one. Measured on a
+    # 2.22 m bench nook: at the fixed 1.0 m default, min_median_depth admitted
+    # 0/9 of the operator's own hand-picked views — it rejected every good
+    # view in the scene — while the same knob at `auto` admits 9/9. On the
+    # 6.13 m lab the two resolve to 0.999 and 1.20, i.e. today's literals, so
+    # `auto` is a no-op on room-sized interiors by construction.
+    #   The fractions ARE the current defaults divided by that lab's 6.13 m
+    # width. They are not independent tuning; if you change a default above,
+    # change its fraction with it or they stop meaning the same thing.
+    auto_frac:
+      min_median_depth: 0.163
+      near_field_depth: 0.196
+    # NOT auto, on evidence: on that nook, median_depth, near_alpha and
+    # coverage ALL overlap between the operator's good views and the
+    # cameras-inside-geometry the filter is meant to catch — no threshold on
+    # them separates the two populations. `sharpness` separates cleanly
+    # (good 0.047-0.070 vs inside-geometry 0.0004-0.0194, a 2.4x gap with no
+    # overlap), because a camera buried in geometry renders mush. On a
+    # close-quarters scene sharpness is the discriminating filter and the
+    # distance ones are along for the ride — which is why scaling them is
+    # about not rejecting good views, NOT about catching bad ones.
+
+  # When is a finished render "healthy"? Used for ONE decision: a re-render
+  # that is unhealthy while the render it would replace was healthy is STAGED
+  # instead of published, so a threshold experiment cannot consume a good
+  # render. Deliberately a REGRESSION test, not a quality bar — on a hard
+  # scene every render trips these, and a manual-only scene sits at 3 views
+  # forever; an absolute bar would refuse legitimate work. The render gate
+  # shows the same two numbers, read from here rather than hardcoded twice.
+  health:
+    min_views: 15
+    min_coverage: 0.9     # frac_final from the coverage metric
+
+detect:
+  checkpoint_image: models/sam3/sam3.pt
+  checkpoint_video: models/sam3/sam3.1_multiplex.pt
+  # Calibrated on a lab-interior probe: negative-control ceiling 0.238 vs
+  # strong-class max >= 0.59 — 0.45 keeps all strong classes with 2x margin
+  # over negatives. The photo-domain default (0.5) approximately transferred;
+  # the gap between the two is the calibration health metric.
+  presence_threshold: 0.45
+  # Per-class overrides, e.g. {"shelving rack": 0.35} — set in scene configs.
+  presence_threshold_overrides: {}
+  # Per-class mask-area ceiling, fraction of the frame: kills
+  # dets where SAM 3 masks a whole furniture piece as a small-object class
+  # (observed: a rolling workbench masked as "cardboard box", absorbing the
+  # real boxes standing on it). Applied at lift alongside the presence
+  # threshold; audited in instance_audit._mask_suppression. A class listed
+  # here is EXEMPT from max_area_factor below — the absolute cap replaces it.
+  max_area_overrides: {}
+  # Class-median area factor (mechanism 1, default ON): kill any
+  # det whose mask area exceeds max_area_factor x its class's median area
+  # among above-threshold dets. Medians are per (class, channel) — text and
+  # exemplar masks never share one (tracker masks run ~2x looser) — and
+  # only exist once a class has max_area_min_dets dets (below that, no cap).
+  # An ABSURDITY GUARD for the whole-furniture-as-small-object shape, not a
+  # tail trimmer: 35 sits above the largest crop-verified honest ratio seen
+  # on a bench-top scene (a camera close-up, 30.3x) and below the
+  # estimated bench-as-cardboard-box blob (>= ~44x); it kills NOTHING on
+  # the current banks. Every kill is logged loudly + audited
+  # (_mask_suppression.factor_cap) — treat one as stop-and-look. null = off.
+  max_area_factor: 35
+  max_area_min_dets: 12
+  # Exemplar prompts : per-scene visual concept references
+  # drawn at the Exemplars gate. null -> <workdir>/exemplars.json when
+  # present; missing file = zero exemplars (silent).
+  # Detections enter stage 2 additively with source=exemplar:<concept>,
+  # gated downstream by exemplar_threshold — an exemplar-similarity scale,
+  # NEVER compared against presence_threshold. Calibrate like the text
+  # thresholds: exemplar rows appear in the probe CSVs / distribution plot
+  # under "exemplar:<concept>" (docs/CALIBRATION.md).
+  exemplars: null
+  exemplar_threshold: 0.4
+  exemplar_threshold_overrides: {}
+  # VRAM cap for the exemplar VIDEO pass: the multiplex tracker
+  # loads EVERY stage-1 frame into one session and its memory bank grows with
+  # frame count, so peak VRAM scales with the scene's frame count — 47 frames
+  # OOM'd a 24 GB 4090 mid-propagation. This caps the session's frame set
+  # (evenly sampled; all exemplar CROP frames force-kept), decoupling peak
+  # VRAM from the scene. ONLY this pass subsamples — the text pass, coverage
+  # and lift still use every frame. Trades tracking density (bigger view gaps
+  # for the tracker to bridge) for headroom. null / >= n_frames = off. Set in
+  # the 24gb profile; 32 GB leaves it off.
+  exemplar_max_frames: null
+  log_threshold: 0.05      # probe: log every detection above this to scores.csv
+  overlay_threshold: 0.30  # probe: draw/persist masks above this in debug overlays
+
+lift:
+  background_gamma: 1.0    # assign iff A_class > gamma * (T - A_class)
+  min_opacity: 0.3         # gaussians below this never form instances
+  instance_voxel: 0.15     # m — connectivity for 3D instance separation
+  min_instance_gaussians: 80
+  count_stability_views: 2 # 2D count must appear in >= this many views to bind
+  # Label scoping = volume + margin: the trimmed
+  # volume answers "where cameras go"; wall-mounted objects sit ON it.
+  scope_margin: 0.3        # m
+  # INSTANCING. `tracks`: instances are DETECTION TRACKS — cross-view
+  # correspondence of per-detection contribution vectors (co-activation)
+  # under cannot-link constraints from same-view mask separation; 3D
+  # connectivity is recorded, never decides. `connectivity`: the previous
+  # voxel-components + split/merge machinery below (kept as the A/B
+  # instrument; its removal is a decision with the bank table in hand).
+  instancing: tracks       # tracks | connectivity
+  # A detection's SUPPORT = gaussians of its class whose in-mask fraction
+  # f = g_d / T_v (this view's rendered mass inside the mask) reaches this
+  # floor; T_v = 0 is no support. Calibrated on the bank (docs/CALIBRATION.md).
+  support_min_frac: 0.5
+  # Two same-class detections are one track when their support-restricted
+  # contribution vectors are this affine (cosine) AND share this fraction
+  # of the smaller support (the bleed guard). Calibrated on the bank.
+  # Affinity weighs the in-mask fraction f (view-invariant for a gaussian
+  # inside the mask); the raw weight g scales with the gaussian's projected
+  # area and collapses the cosine between two views of one large or flat
+  # object (bank table in docs/CALIBRATION.md).
+  track_affinity_min: 0.2
+  track_min_support_ios: 0.3
+  # Two same-class masks in ONE view are a cannot-link pair when their
+  # intersection over the SMALLER mask is at or below this (near-disjoint;
+  # a part inside a whole scores 1.0 and is not cannot-linked).
+  cannot_link_ios_max: 0.1
+  # VRAM: detection channels per rasterisation. `auto` sizes the chunk from
+  # the card's free memory when the pass starts (the lift says what it
+  # chose and why in its log, and refuses before the pass when even one
+  # channel cannot fit); a number pins it. Changes nothing
+  # numerically: a chunk boundary that changes the result is a bug.
+  det_channel_chunk: auto
+  # Forced-split mechanism when 3D undercounts vs 2D: partition
+  # by per-detection contribution profiles (evidence boundaries), not bare
+  # coordinate k-means (which cut merged panels arbitrarily).
+  split_mode: mask_guided  # mask_guided | kmeans
+  split_views: 4           # multi-instance views used for the det profiles
+  # 2D-CORRESPONDENCE sanity: split a component whose depth-tested
+  # projection spans >= 2 near-disjoint same-class masks in enough views —
+  # catches per-object merges the global count check cannot see (the desk
+  # monitor pair). Uses count_stability_views as the vote threshold.
+  split_correspondence: true
+  corr_min_frac: 0.3       # each mask must hold >= this of visible points
+  corr_mask_iou_max: 0.3   # the two masks must be near-disjoint
+  # The count/correspondence machinery was split-ONLY, so 3D count could
+  # run far ABOVE 2D evidence as stacked near-identical instances (observed on
+  # potted plants: one connected component force-split to 7, then
+  # correspondence-recursed to 18 vs 2D-expected 7). Two remedies, both
+  # using the SAME pairwise 2D-distinctness test (each set dominantly in a
+  # DIFFERENT near-disjoint mask, corr_* thresholds; distinct on a
+  # count_stability_views quorum OR a majority of co-visible views — wall
+  # objects 2 m apart may co-appear in only one view):
+  split_require_distinct: true  # refuse splits whose children fail the test
+  same_class_merge: true   # merge overlapping same-class instances that fail it
+  merge_ios: 0.4           # candidate pair: AABB intersection / min volume, or
+  merge_dist_frac: 0.5     # centroid distance <= frac * min AABB diagonal
+  # NOTE: geometry alone cannot make the merge call — two REAL side-by-side
+  # display-case picture frames overlapped at IoS 0.51 while plant duplicates
+  # sat at IoS 1.00; only the 2D masks separate those cases.
+  # Per-class background-gamma overrides: classes detected in few views
+  # need a lower bar; calibrate from the needed-gamma audit.
+  background_gamma_overrides: {}
+  # Specific-over-generic dedup policy: SAM 3 umbrella concepts (a term like
+  # "monument" covering several distinct object types) mask WHOLE objects of
+  # many types, so the standard mutual/part-of rules suppress the
+  # type-specific classes — invisible at the probe (scores stay healthy),
+  # visible only in the funnel's dedup attribution. Renaming does NOT fix this
+  # (verified: a synonym masks the same whole objects — the umbrella is
+  # concept-level, not word-level). `specific` is an ORDERED
+  # PRIORITY list (earlier = higher). In any containment pair between two
+  # listed classes the higher-priority det survives: mutual -> the lower
+  # one drops; part-of with the higher-priority side as the PART -> the
+  # part is KEPT and its pixels CARVED out of the whole's mask at
+  # accumulation. generic classes rank below every specific one; unlisted
+  # classes keep the standard score/containment rules. Empty = off; values
+  # live in scene profiles.
+  specific_over_generic:
+    generic: []
+    specific: []   # ORDERED: priority, highest first
+  # Same-view cross-class mask containment dedup.
+  # Thresholds calibrated on a lab-interior containment audit.
+  mask_dedup: true
+  mask_dedup_mutual_ios: 0.7  # mutual containment = synonym; keep higher score
+  partof_ios: 0.9          # asymmetric containment level to count as part-of
+  partof_min_views: 3      # pair must recur in >= this many views to believe it
+
+export:
+  # auto: per-instance choice — gravity-aligned (up pinned,
+  # yaw from 2D ground-plane PCA; room objects) UNLESS the
+  # instance is strongly planar AND tilted (panel-like: smallest-axis std <
+  # planar_ratio x next axis, AND the plane normal's up-component >
+  # planar_min_updot — i.e. the plane is far from vertical), which gets full
+  # PCA: yaw-only boxes cannot fit an open tilted door or ceiling-angled
+  # acoustic panels. Decided per instance; there is no global override.
+  # Export floor: drop instances whose projections matched NO
+  # detection in any view (the zero-confidence sliver artifact — lift shards
+  # just above min_instance_gaussians). Default 1: at least one
+  # matched detection to export. 0 = off (export everything lift found).
+  # Universal knob; the viewer's min-confidence slider is the user control.
+  min_matched_frames: 1
+  obb_planar_ratio: 0.25      # thin iff sqrt(smallest/next eigenvalue) < this
+  obb_planar_min_updot: 0.25  # tilted iff |plane normal . up| > this (~>14 deg)
+  visibility_min_points: 30   # projected gaussians needed to call a view "sees it"
+  det_match_min_overlap: 0.2  # frac of visible points inside a det mask to match
+                              # (connectivity-mode lifts only; tracks carry
+                              # their own detections)
+  top_k_confidence: 3         # aggregate confidence = mean of top-k matched scores
+  # Association hold (written at export so a skipped verification
+  # cannot hide it): an object that lost at least this fraction of its
+  # track's support to ambiguity-created unassigned gaussians is HELD
+  # (reason `ambiguous_unassigned`), alongside `ambiguous_det` and
+  # `refused_merge`. Calibrated on the bank (docs/CALIBRATION.md).
+  hold_unassigned_frac: 0.1
+
+vlm:
+  # LOCAL model, run on this machine — nothing here reaches the network and
+  # there is no API key. Weights live next to the SAM 3
+  # checkpoints under models/, fetched by README step 7; the path is
+  # configured, never a hub id, so a run cannot silently download.
+  model: Qwen3.8-27B
+  model_dir: models/qwen3.8-27b
+  # The models Carveout knows by directory name: the display name, the
+  # download repo and the MEASURED 4-bit peak (null = not measured yet;
+  # the preflight then estimates from the checkpoint's size and says so).
+  # A scene profile may carry its own `vlm.model_dir` (chosen at creation
+  # or on the vocabulary / verify panels); a directory not listed here is
+  # shown by its basename. `carveout web --vlm-dir` is the server's
+  # default for scenes that did not choose.
+  catalogue:
+    qwen3.8-27b: {name: Qwen3.8-27B, hf_repo: Qwen/Qwen3.8-27B, vram_4bit_gib: 17.5}
+    qwen3-vl-8b: {name: Qwen3-VL-8B, hf_repo: Qwen/Qwen3-VL-8B-Instruct, vram_4bit_gib: 6.3}
+  # Download path for the refusal message when the weights are absent;
+  # defaults to Qwen/<model>.
+  hf_repo: Qwen/Qwen3.8-27B
+  max_views: 6
+  distractors: 3
+  # Every model loads COMPRESSED (4-bit NF4 — a smaller model exists to
+  # leave room on the card, and "full precision when it
+  # fits" loaded the 8B at the same 17.5 GiB as the compressed 27B), or a
+  # refusal with numbers when even that will not fit. The need the
+  # preflight states is this MEASURED peak (a 24 GB 4090, this checkpoint);
+  # a different model_dir takes the catalogue's number, or estimates from
+  # the checkpoint size when none is measured, saying so.
+  vram_4bit_gib: 17.5
+  # The models ship do_sample=true with their own tuned temperature/top_p, and
+  # greedy decoding makes them repeat until the token cap — stage 1.5 returned
+  # NO vocabulary at all that way. Reproducibility comes from this seed, set
+  # once per model load, not from disabling sampling.
+  seed: 0
+  # Every image is downsized to this before the model sees it. Small objects
+  # are the documented weak spot, so this is a knob worth measuring rather
+  # than assuming.
+  max_side: 768
+  # Token budgets per stage. A verdict is one line; a vocabulary is a list of
+  # 40-60 entries and needs an order of magnitude more. A single budget of
+  # 1000 (inherited from the API path) truncated every proposal mid-array.
+  max_new_tokens: {verify: 400, support: 400, propose: 2000}
+  # A runaway list — the model never closes its brackets and runs to the
+  # cap — is what the 8B did on three of six workbench views (~55 s
+  # each). The prompt bounds the list, the proposal decodes with a
+  # mild repetition penalty (1.0 = the model's own default, no penalty), a
+  # reply that hit the cap is re-asked from the prompt rather than with the
+  # runaway as context, and the complete entries of a last reply that still
+  # hit the cap are kept and said so in the stage log.
+  propose_max_objects: 40
+  propose_repetition_penalty: 1.05
+  # Stage 1.5 asks about ONE view per call and unions the answers. Asking
+  # about six at once makes the model describe the room and miss the objects
+  # on the bench: measured 3/14 -> 7/14 of a scene's confirmed vocabulary.
+  # Format-reminder retries on a malformed VLM reply: the bad
+  # reply + a reminder are appended and the exchange retried; after the last
+  # attempt verify marks the INSTANCE UNVERIFIED (label kept, flagged)
+  # instead of aborting the stage.
+  json_retries: 2
+  # Stage 4.5 verification: best 1-3 views per instance, crop padding
+  # as a fraction of the detection box.
+  verify_views: 3
+  # Name first: the verifier names the crops with NO
+  # label in the prompt; a match confirms, else a second question puts
+  # the detected label and the name on equal footing. Told the label up
+  # front ("this is labeled X, confirm?") it confirmed the wrong label
+  # 19 times out of 20 on a test scene. false = that single
+  # labelled question, kept for one release so a scene can be verified
+  # both ways and compared.
+  verify_name_first: true
+  verify_pad: 0.25
+  # When the instance's projected bbox disagrees with its best detection box
+  # (IoU below this), verify the PROJECTION crop — a false positive's det
+  # boxes frame whatever looked like the label, not the instance itself.
+  verify_proj_iou_min: 0.25
+  # RELABEL support check: a RELABEL needs a HIGHER bar than a CONFIRM. The
+  # initial verdict names the crop's DOMINANT object, which is not necessarily
+  # the instance (observed: a whiteboard relabeled "donut" from one crop whose
+  # salient content was a donut hanging on the door knob in front of it).
+  # A proposed relabel must be re-confirmed on crops of the instance's OWN
+  # gaussian projections in >= relabel_min_agree_views distinct views; a
+  # single-crop verdict may CONFIRM but never RELABEL. Failures keep the
+  # detected label (verdict RELABEL_UNSUPPORTED, proposal in the rationale).
+  # The support crops MARK the instance's projected bounds with a red
+  # rectangle and ask about the marked object ONLY — an unmarked crop lets a
+  # salient neighbor lend its identity (first implementation failed exactly
+  # so: soda can "confirmed" as water bottle because a bottle stood beside
+  # it in every crop; the whiteboard-on-door became "office door").
+  relabel_support_check: true
+  relabel_check_views: 3     # instance-projection views used for the check
+  relabel_min_agree_views: 2 # views that must confirm the proposed label
+  relabel_support_pad: 0.6   # generous context around the marked rectangle
+  # Relabel constraints (found on an exterior scene; pipeline-generic):
+  # free-text relabels re-imported the umbrella terms the vocabulary review
+  # had collapsed, and an 11 m paved-path instance was relabeled 'tree trunk'
+  # by the foreground trunks standing inside its own huge crop (the support
+  # check INHERITED that defect). Useful regression cases when changing this:
+  # water-bottle/soda-can, donut/whiteboard.
+  relabel_vocab_only: true   # RELABEL only within the scene vocabulary;
+                             # outside -> label kept + reject-candidate flag
+  # Specific over generic — an OPERATOR OPTION on
+  # the Objects panel, off by default, recorded per scene: a name outside
+  # the vocabulary stands when the model says it is a kind of the detected
+  # label (an onion for "vegetables"); a more general word never is, so
+  # the umbrella terms the rule above guards against cannot come back.
+  # The support check still follows. Changing it re-opens verification
+  # as a real run.
+  relabel_specific_ok: false
+  # The object's own render as a witness for small objects — an OPERATOR
+  # OPTION on the Objects panel, off by default,
+  # recorded per scene: under the Gaussian threshold, the instance's own
+  # 3D reconstruction rendered alone joins the crops as one more image
+  # (the best witness under ~300 Gaussians — six of eight
+  # onions — and absurd above, hence the cap; never alone).
+  verify_isolated: false
+  verify_isolated_max_gaussians: 300
+  relabel_max_box_frac: 0.5  # instances whose crop boxes span more than
+                             # this frame fraction (median) are exempt from
+                             # RELABEL — CONFIRM/REJECT only
+
+profiles:
+  24gb:
+    render: { width: 768, height: 768, views_in_flight: 2 }
+    # exemplar_max_frames 24: 30 completed on a 4090 but flush to the
+    # 24 GB limit (zero margin), so 24 is the conservative interim — survives
+    # normal desktop/browser overhead swings. The exemplar pass now logs its
+    # peak VRAM (probe manifest exemplar_peak_alloc_gb); raise back toward 30
+    # if a run shows real headroom, or lower if overhead grows.
+    detect: { exemplar_max_frames: 24 }
+  32gb:
+    render: { width: 1024, height: 1024, views_in_flight: 4 }
+    # exemplar_max_frames 48: a 5090 fit a 47-frame scene
+    # uncapped, so 48 preserves full density on normal scenes (47 <= 48) while
+    # bounding the unbounded tail — a 90+ frame scene would otherwise OOM even
+    # 32 GB. 2x the 24gb cap, so the extra 8 GB buys more tracking density on
+    # large scenes. Provisional; tune from a 5090 exemplar_peak_alloc_gb read.
+    detect: { exemplar_max_frames: 48 }

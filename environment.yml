@@ -1,0 +1,53 @@
+# SPDX-FileCopyrightText: 2026 Dpt. <https://www.dpt.co>
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Carveout conda env spec — keep in sync with every dependency change.
+# Recreation: conda env create -f environment.yml && bash scripts/setup_env.sh
+# then per-rig HF auth (hf auth login) and gated checkpoint download — see README.md.
+# NOTE: gsplat JIT-compiles CUDA kernels on first use — needs a SYSTEM CUDA 12.8
+# toolkit (nvcc) + TORCH_CUDA_ARCH_LIST (setup_env.sh sets the arch list). Point the
+# env at the toolkit per-rig with
+#   conda env config vars set -n carveout CUDA_HOME=/usr/local/cuda-12.8
+# (see README "CUDA toolkit" for install + coexistence). First render ~2 min extra.
+name: carveout
+channels:
+  - defaults
+dependencies:
+  # Python 3.12: required by the sam3 repo (README "Python 3.12 or higher");
+  # supersedes the initial 3.11 choice.
+  - python=3.12
+  - pip
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu128
+      # cu128 wheels ONLY: older wheels lack sm_120 (RTX 5090) kernels.
+      - torch==2.7.1+cu128
+      - torchvision==0.22.1+cu128
+      # sam3 requires numpy>=1.26,<2 — pinned so torch's numpy-2.x default
+      # doesn't sneak back in on recreation.
+      - numpy==1.26.4
+      - huggingface_hub==1.22.0
+      - ninja           # gsplat JIT kernel builds
+      - gsplat==1.5.3
+      # pinned to the tested commit — upstream main is a moving target
+      - sam3 @ git+https://github.com/facebookresearch/sam3.git@46957e47805eaa273f4aa7bbbd25a88bca9108ce
+      # Undeclared runtime deps of sam3 (imported by core code but missing from
+      # its pyproject; found empirically at the smoke tests):
+      - setuptools<81   # sam3 imports pkg_resources, removed in setuptools>=81
+      - einops
+      - pycocotools
+      - psutil
+      # carveout package deps
+      - plyfile==1.1.3
+      - matplotlib==3.11.0   # volume review plots, score-distribution plots
+      # Local VLM for stages 1.5/4.5. PURE ADDITIONS: none of the
+      # three re-resolves torch, which stays pinned at 2.7.1+cu128 above —
+      # verified after install (torch/torchvision/gsplat/sam3 all unchanged).
+      # This is why the serving stack is transformers and not vLLM: vLLM pins
+      # torch==2.13.0, which would take gsplat's JIT kernels and sam3 with it,
+      # and its own recipe for the model leaves the vision path unverified.
+      - transformers==5.16.1
+      - accelerate==1.14.0
+      # NF4 4-bit, for checkpoints that do not fit 24 GB at bf16
+      - bitsandbytes==0.50.2
+      # the carveout package itself (editable, from the repo root)
+      - -e .

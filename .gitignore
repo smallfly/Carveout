@@ -1,0 +1,40 @@
+# Never commit
+reference/
+models/
+.env
+
+# data/ ships as an empty skeleton: the folders exist in a fresh clone, their
+# contents (captures, weights, anything an operator drops in) do not.
+data/*
+!data/.gitkeep
+!data/scenes/
+data/scenes/*
+!data/scenes/.gitkeep
+
+# Agent tooling config — machine-local, never a repo artifact.
+.claude/
+
+# configs/ ships exactly one thing: the defaults. Scene profiles live in
+# configs/scenes/ and NEVER ship — a profile carries a scene's calibration
+# and vocabulary; there is one profile directory and no override file.
+configs/*
+!configs/default.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+
+# Pipeline work directories (stage caches, renders, masks)
+workdir/
+work/
+
+# Editor / misc
+.vscode/
+*.log
+
+# Throwaway debugging drops (convention: debug/<date>_<topic>/).
+debug/
